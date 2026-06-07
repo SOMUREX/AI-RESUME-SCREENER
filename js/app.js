@@ -327,7 +327,7 @@ function setupEventListeners() {
     document.querySelectorAll('.history-item').forEach(item => item.classList.remove('active'));
   });
 
-  dom.btnExportText.addEventListener('click', exportAssessmentMarkdown);
+  dom.btnExportText.addEventListener('click', exportAssessmentPDF);
 
   dom.clearHistory.addEventListener('click', () => {
     if (confirm('Are you sure you want to clear your entire screening history?')) {
@@ -1053,63 +1053,171 @@ function renderHistory() {
   });
 }
 
-// Generate Markdown report download
-function exportAssessmentMarkdown() {
+// Generate styled PDF report download
+function exportAssessmentPDF() {
   if (!state.currentScreening) return;
   const data = state.currentScreening.evaluationData;
   const role = state.currentScreening.candidateRole;
+  const timestamp = state.currentScreening.timestamp;
 
-  let md = `# Candidate Evaluation Report: ${data.candidateName}\n`;
-  md += `**Role screened**: ${role}\n`;
-  md += `**Overall Match Score**: ${data.matchScore}%\n`;
-  md += `**Date Screened**: ${state.currentScreening.timestamp}\n\n`;
+  // Create temporary container for report styling
+  const container = document.createElement('div');
+  container.style.padding = '40px';
+  container.style.color = '#111827';
+  container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  container.style.backgroundColor = '#ffffff';
 
-  md += `## 1. Candidate Contact Information\n`;
-  md += `- Email: ${data.email || 'N/A'}\n`;
-  md += `- Phone: ${data.phone || 'N/A'}\n`;
-  md += `- Education: ${data.education || 'N/A'}\n`;
-  md += `- Years of Experience: ${data.experienceYears || 'N/A'}\n\n`;
+  const strengthsList = (data.strengths && data.strengths.length)
+    ? data.strengths.map(s => `<li style="margin-bottom: 6px;">${s}</li>`).join('')
+    : '<li style="margin-bottom: 6px;">No significant strengths flagged.</li>';
 
-  md += `## 2. Match Summary\n`;
-  md += `> ${data.summary}\n\n`;
-  md += `*Tagline*: ${data.scoreTagline}\n\n`;
+  const weaknessesList = (data.weaknesses && data.weaknesses.length)
+    ? data.weaknesses.map(w => `<li style="margin-bottom: 6px;">${w}</li>`).join('')
+    : '<li style="margin-bottom: 6px;">No critical weaknesses or gaps identified.</li>';
 
-  md += `## 3. Key Strengths\n`;
-  if (data.strengths) data.strengths.forEach(s => md += `- ${s}\n`);
-  md += `\n`;
+  const skillsRows = (data.skillsMatrix && data.skillsMatrix.length)
+    ? data.skillsMatrix.map(sm => `
+        <tr style="border-bottom: 1px solid #f3f4f6;">
+          <td style="padding: 10px; font-weight: 500; color: #111827;">${sm.skill}</td>
+          <td style="padding: 10px; text-align: center;">${sm.required ? 'Yes' : 'No'}</td>
+          <td style="padding: 10px; text-align: center;">
+            <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background-color: ${sm.match === 'yes' ? '#d1fae5' : sm.match === 'partial' ? '#fef3c7' : '#fee2e2'}; color: ${sm.match === 'yes' ? '#065f46' : sm.match === 'partial' ? '#92400e' : '#991b1b'};">
+              ${sm.match === 'yes' ? 'Matched' : sm.match === 'partial' ? 'Partial' : 'Gap'}
+            </span>
+          </td>
+          <td style="padding: 10px; color: #4b5563;">${sm.status}</td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="4" style="padding: 10px; text-align: center; color: #6b7280;">No skills checked.</td></tr>';
 
-  md += `## 4. Gaps / Development Areas\n`;
-  if (data.weaknesses) data.weaknesses.forEach(w => md += `- ${w}\n`);
-  md += `\n`;
+  const questionsBlocks = (data.interviewQuestions && data.interviewQuestions.length)
+    ? data.interviewQuestions.map((iq, idx) => `
+        <div style="background-color: #faf5ff; border: 1px solid #e9d5ff; border-radius: 6px; padding: 15px; margin-bottom: 15px; page-break-inside: avoid;">
+          <h4 style="font-size: 14px; margin: 0 0 8px 0; color: #6b21a8;">Question ${idx + 1}: ${iq.question}</h4>
+          <div style="border-left: 2px solid #a855f7; padding-left: 12px; margin-top: 8px; font-size: 12px; color: #581c87; line-height: 1.5;">
+            <strong>Evaluation Rubric / Ideal Answer:</strong>
+            <p style="margin: 4px 0 0 0;">${iq.rubric || iq.expectedAnswer || 'Look for details checking depth of concepts and project implementation.'}</p>
+          </div>
+        </div>
+      `).join('')
+    : '<p style="color: #6b7280;">No custom questions generated.</p>';
 
-  md += `## 5. Skills Alignment Matrix\n`;
-  md += `| Skill / Requirement | Required | Match | Status/Details |\n`;
-  md += `| :--- | :---: | :---: | :--- |\n`;
-  if (data.skillsMatrix) {
-    data.skillsMatrix.forEach(sm => {
-      md += `| ${sm.skill} | ${sm.required ? 'Yes' : 'No'} | ${sm.match.toUpperCase()} | ${sm.status} |\n`;
+  // Build printable layout markup
+  let html = `
+    <div style="border-bottom: 2px solid #8b5cf6; padding-bottom: 15px; margin-bottom: 25px;">
+      <h1 style="font-size: 24px; color: #1e1b4b; margin: 0; font-family: system-ui, sans-serif; font-weight: 800;">ResumeAI Screener — Candidate Assessment</h1>
+      <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">Report Generated: ${timestamp} | Powered by Local ML Backend</p>
+    </div>
+
+    <!-- Candidate Profile Header -->
+    <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px; display: table; width: 100%; box-sizing: border-box; border-left: 5px solid #8b5cf6;">
+      <div style="display: table-cell; width: 65%; vertical-align: top; padding-right: 20px;">
+        <h2 style="font-size: 20px; margin: 0 0 4px 0; color: #111827; font-weight: 700;">${data.candidateName || 'Unknown Candidate'}</h2>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 15px 0;">Target Role: <strong>${role}</strong></p>
+        
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 4px 0; color: #6b7280; width: 90px; font-weight: 600;">Email:</td>
+            <td style="padding: 4px 0; font-weight: 500; color: #1f2937;">${data.email || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #6b7280; font-weight: 600;">Phone:</td>
+            <td style="padding: 4px 0; font-weight: 500; color: #1f2937;">${data.phone || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #6b7280; font-weight: 600;">Education:</td>
+            <td style="padding: 4px 0; font-weight: 500; color: #1f2937;">${data.education || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #6b7280; font-weight: 600;">Experience:</td>
+            <td style="padding: 4px 0; font-weight: 500; color: #1f2937;">${data.experienceYears || 'N/A'}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <div style="display: table-cell; width: 35%; text-align: center; vertical-align: middle; border-left: 1px solid #e5e7eb; padding-left: 20px;">
+        <span style="font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 700; letter-spacing: 0.5px;">Match Score</span>
+        <div style="font-size: 46px; font-weight: 800; color: #8b5cf6; margin: 4px 0; line-height: 1;">${data.matchScore}%</div>
+        <span style="font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 12px; display: inline-block; background-color: ${data.matchScore >= 85 ? '#d1fae5' : data.matchScore >= 70 ? '#fef3c7' : '#fee2e2'}; color: ${data.matchScore >= 85 ? '#065f46' : data.matchScore >= 70 ? '#92400e' : '#991b1b'};">
+          ${data.matchScore >= 85 ? 'Strong Match' : data.matchScore >= 70 ? 'Moderate Fit' : 'Low Fit'}
+        </span>
+      </div>
+    </div>
+
+    <!-- Recommendation Summary -->
+    <div style="margin-bottom: 25px; box-sizing: border-box;">
+      <h3 style="font-size: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; color: #1e1b4b; margin: 0 0 10px 0; font-weight: 700;">Fit Recommendation Summary</h3>
+      <p style="font-size: 13.5px; line-height: 1.6; color: #374151; margin: 0 0 6px 0;">${data.summary}</p>
+      <p style="font-size: 12.5px; font-style: italic; color: #6b7280; margin: 0;">" ${data.scoreTagline} "</p>
+    </div>
+
+    <!-- Strengths & Gaps -->
+    <div style="display: table; width: 100%; margin-bottom: 30px; box-sizing: border-box;">
+      <div style="display: table-cell; width: 50%; padding-right: 10px; vertical-align: top;">
+        <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 15px; min-height: 140px; box-sizing: border-box;">
+          <h4 style="font-size: 13.5px; margin: 0 0 10px 0; color: #166534; font-weight: 700;">✓ Candidate Strengths</h4>
+          <ul style="margin: 0; padding-left: 18px; font-size: 12.5px; color: #14532d; line-height: 1.5;">
+            ${strengthsList}
+          </ul>
+        </div>
+      </div>
+      <div style="display: table-cell; width: 50%; padding-left: 10px; vertical-align: top;">
+        <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 15px; min-height: 140px; box-sizing: border-box;">
+          <h4 style="font-size: 13.5px; margin: 0 0 10px 0; color: #991b1b; font-weight: 700;">⚠ Development Gaps</h4>
+          <ul style="margin: 0; padding-left: 18px; font-size: 12.5px; color: #7f1d1d; line-height: 1.5;">
+            ${weaknessesList}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills Matrix Table -->
+    <div style="margin-bottom: 30px; page-break-inside: avoid; box-sizing: border-box;">
+      <h3 style="font-size: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; color: #1e1b4b; margin: 0 0 12px 0; font-weight: 700;">Skills & Requirement Alignment</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left;">
+        <thead>
+          <tr style="background-color: #f9fafb; border-bottom: 2px solid #e5e7eb;">
+            <th style="padding: 8px 10px; font-weight: 600; color: #374151;">Required Skill / Stack</th>
+            <th style="padding: 8px 10px; font-weight: 600; color: #374151; text-align: center; width: 80px;">Required</th>
+            <th style="padding: 8px 10px; font-weight: 600; color: #374151; text-align: center; width: 100px;">Match</th>
+            <th style="padding: 8px 10px; font-weight: 600; color: #374151;">Level / Gap Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${skillsRows}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Custom Interview Questions -->
+    <div style="page-break-before: always; padding-top: 10px; box-sizing: border-box;">
+      <h3 style="font-size: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; color: #1e1b4b; margin: 0 0 10px 0; font-weight: 700;">Tailored Technical Interview Guide</h3>
+      <p style="font-size: 12.5px; color: #6b7280; margin: 0 0 15px 0;">Auditing questions generated specifically to evaluate critical gaps and clarify candidate depth.</p>
+      
+      ${questionsBlocks}
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  // Configuration settings for html2pdf bundle
+  const opt = {
+    margin: [15, 15, 15, 15],
+    filename: `ResumeAI_Assessment_${data.candidateName.replace(/\s+/g, '_')}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  // Execute pdf download
+  if (typeof html2pdf !== 'undefined') {
+    html2pdf().from(container).set(opt).save().catch(err => {
+      console.error("html2pdf processing failed:", err);
+      alert("Failed to render PDF: " + err.message);
     });
+  } else {
+    alert("Error: html2pdf library was not loaded properly from CDN. Check your internet connectivity.");
   }
-  md += `\n`;
-
-  md += `## 6. Custom Interview Screening Questions\n`;
-  if (data.interviewQuestions) {
-    data.interviewQuestions.forEach((iq, idx) => {
-      md += `### Question ${idx + 1}: ${iq.question}\n`;
-      md += `**Interviewer Rubric**: ${iq.rubric || iq.expectedAnswer}\n\n`;
-    });
-  }
-
-  // Download File trigger client-side
-  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `ResumeAI_Assessment_${data.candidateName.replace(/\s+/g, '_')}.md`);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
 }
 
 // Utility Helpers
