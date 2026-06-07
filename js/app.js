@@ -70,7 +70,7 @@ Key Requirements:
 
 // Application State
 const state = {
-  apiMode: localStorage.getItem('screener_api_mode') || 'gemini',
+  apiMode: localStorage.getItem('screener_api_mode') || 'ml-backend',
   apiKey: localStorage.getItem('screener_api_key') || '',
   apiModel: localStorage.getItem('screener_api_model') || 'gemini-2.5-flash',
 
