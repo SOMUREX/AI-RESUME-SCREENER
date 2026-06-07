@@ -529,10 +529,10 @@ async function startScreeningFlow() {
 
 async function screenWithMLBackend(jobDesc, resumeText) {
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  // When deployed, replace the placeholder domain with your actual deployed Render API address
+  // When deployed, replace the placeholder domain with your actual deployed Hugging Face API address
   const url = isLocalhost 
     ? 'http://127.0.0.1:8000/analyze' 
-    : 'https://YOUR-RENDER-SERVICE-NAME.onrender.com/analyze';
+    : 'https://somurex-ai-resume-screener-api.hf.space/analyze';
   const requestBody = {
     resume_text: resumeText,
     job_desc: jobDesc
