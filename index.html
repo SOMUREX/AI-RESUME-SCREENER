@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ResumeAI Screener — Intelligent Candidate Evaluation</title>
+  <meta name="description"
+    content="Screen resumes instantly against job descriptions using Google Gemini. Extract skills, analyze experience, map gaps, and generate tailored interview guides client-side.">
+
+  <!-- Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- PDF.js CDN for client-side PDF parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- Application CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+  <div class="app-layout">
+    <!-- Sidebar: Logo & Screening History -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          <i data-lucide="cpu" class="logo-icon"></i>
+        </div>
+        <div class="brand-text">
+          <h1>ResumeAI</h1>
+          <span class="badge badge-accent">Screener</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">
+          <span>Screening History</span>
+          <button id="clear-history" class="btn-icon" title="Clear all history">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+        <div id="history-list" class="history-list">
+          <div class="empty-history">
+            <i data-lucide="history"></i>
+            <p>No screening history yet</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button id="btn-settings-trigger" class="btn btn-secondary w-full">
+          <i data-lucide="settings"></i>
+          <span>API Configuration</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main content area -->
+    <main class="main-content">
+      <!-- Top navbar -->
+      <header class="navbar">
+        <div class="navbar-left">
+          <h2>Dashboard</h2>
+          <span id="api-status-badge" class="status-indicator mode-mock">
+            <span class="status-dot"></span>
+            <span id="api-status-text">Interactive Demo Mode</span>
+          </span>
+        </div>
+        <div class="navbar-right">
+          <button id="theme-toggle" class="btn-icon" title="Toggle light/dark theme" style="margin-right: 12px;">
+            <i data-lucide="sun"></i>
+          </button>
+          <a href="https://github.com/GoogleChrome/modern-web-guidance" target="_blank" class="nav-link">
+            <i data-lucide="book-open"></i>
+            <span>Modern Web Docs</span>
+          </a>
+        </div>
+      </header>
+
+      <!-- Input Panel: Job Description & Resume Upload -->
+      <section id="input-section" class="card grid-container">
+        <!-- Job Description Column -->
+        <div class="card-column">
+          <div class="column-header">
+            <div class="icon-circle text-primary">
+              <i data-lucide="briefcase"></i>
+            </div>
+            <div>
+              <h3>1. Job Description</h3>
+              <p class="subtitle">Specify role requirements or use a template</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="template-select">Template Assistant</label>
+            <div class="select-wrapper">
+              <select id="template-select">
+                <option value="" disabled selected>Select a pre-filled role template...</option>
+                <option value="frontend">Frontend Engineer (React/TypeScript)</option>
+                <option value="backend">Backend Engineer (NodeJS/Go/Databases)</option>
+                <option value="fullstack">Fullstack Developer (Next.js/Postgres)</option>
+                <option value="datascience">Data Scientist & AI Developer (Python/PyTorch)</option>
+                <option value="product">Technical Product Manager</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group flex-grow">
+            <label for="job-description">Job Requirements & Key Skills</label>
+            <textarea id="job-description"
+              placeholder="Paste the job requirements, qualifications, and key responsibilities here... (Minimum 20 characters)"
+              required></textarea>
+            <div class="textarea-footer">
+              <span id="jd-word-count">0 words</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resume Upload Column -->
+        <div class="card-column">
+          <div class="column-header">
+            <div class="icon-circle text-secondary">
+              <i data-lucide="file-text"></i>
+            </div>
+            <div>
+              <h3>2. Candidate Resume</h3>
+              <p class="subtitle">Upload PDF or paste resume text</p>
+            </div>
+          </div>
+
+          <!-- Tab selector for upload method -->
+          <div class="tabs-navigation">
+            <button class="tab-nav-btn active" data-tab="upload-tab">
+              <i data-lucide="upload-cloud"></i> Upload PDF
+            </button>
+            <button class="tab-nav-btn" data-tab="paste-tab">
+              <i data-lucide="edit-3"></i> Paste Text
+            </button>
+          </div>
+
+          <div class="tabs-content">
+            <!-- Upload PDF Tab -->
+            <div id="upload-tab" class="tab-pane active">
+              <div id="drop-zone" class="drop-zone">
+                <input type="file" id="resume-file" accept=".pdf" class="file-input">
+                <div class="drop-zone-content">
+                  <i data-lucide="upload" class="upload-icon"></i>
+                  <h4>Drag & Drop Resume PDF</h4>
+                  <p>or <span>browse your computer</span></p>
+                  <p class="file-specs">Supports PDF format (Max 10MB)</p>
+                </div>
+                <div class="file-preview-card" style="display: none;">
+                  <div class="file-info">
+                    <i data-lucide="file-type-2" class="preview-file-icon"></i>
+                    <div>
+                      <span class="preview-filename">resume.pdf</span>
+                      <span class="preview-filesize">0 KB</span>
+                    </div>
+                  </div>
+                  <button type="button" id="remove-file" class="btn-icon">
+                    <i data-lucide="x"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paste Text Tab -->
+            <div id="paste-tab" class="tab-pane">
+              <div class="form-group flex-grow">
+                <label for="resume-text">Paste Plain Text Resume</label>
+                <textarea id="resume-text" placeholder="Copy and paste the plain text of the resume here..."></textarea>
+                <div class="textarea-footer">
+                  <span id="resume-word-count">0 words</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions-panel">
+            <button id="btn-screen" class="btn btn-primary w-full disabled" disabled>
+              <i data-lucide="sparkles"></i>
+              <span>Screen Resume</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Loading Panel -->
+      <section id="loading-panel" class="card loading-panel" style="display: none;">
+        <div class="loader-content">
+          <div class="spinner-container">
+            <div class="double-spinner"></div>
+            <i data-lucide="brain" class="loader-icon-overlay"></i>
+          </div>
+          <h3>Consulting Gemini AI...</h3>
+          <p id="loader-status">Parsing resume data and analyzing qualifications...</p>
+        </div>
+      </section>
+
+      <!-- Results Dashboard Panel -->
+      <section id="results-panel" class="results-panel" style="display: none;">
+        <div class="dashboard-header">
+          <div class="candidate-meta">
+            <h2 id="result-candidate-name">John Doe</h2>
+            <p id="result-candidate-title">Candidate Evaluation Overview</p>
+          </div>
+          <div class="dashboard-actions">
+            <button id="btn-export-text" class="btn btn-secondary">
+              <i data-lucide="download"></i> Export Markdown
+            </button>
+            <button id="btn-reset" class="btn btn-primary">
+              <i data-lucide="refresh-cw"></i> Screen Another
+            </button>
+          </div>
+        </div>
+
+        <div class="grid-layout-3-2">
+          <!-- Main evaluation details -->
+          <div class="main-column flex-column">
+            <!-- Details Tabs navigation -->
+            <div class="card result-tabs-card">
+              <div class="result-tabs">
+                <button class="result-tab-btn active" data-result-tab="eval-tab">
+                  <i data-lucide="clipboard-check"></i> Overall Evaluation
+                </button>
+                <button class="result-tab-btn" data-result-tab="gap-tab">
+                  <i data-lucide="split"></i> Skill Gap Matrix
+                </button>
+                <button class="result-tab-btn" data-result-tab="interview-tab">
+                  <i data-lucide="message-square-code"></i> Interview Guide
+                </button>
+              </div>
+
+              <div class="result-tab-panes">
+                <!-- Evaluation Tab -->
+                <div id="eval-tab" class="result-tab-pane active">
+                  <div class="card-inner-section">
+                    <h4 class="section-title text-emerald"><i data-lucide="check-circle2"></i> Key Strengths</h4>
+                    <ul id="list-strengths" class="pros-cons-list pro-list">
+                      <!-- Dynamically added -->
+                    </ul>
+                  </div>
+
+                  <div class="card-inner-section">
+                    <h4 class="section-title text-rose"><i data-lucide="alert-circle"></i> Development Areas</h4>
+                    <ul id="list-weaknesses" class="pros-cons-list con-list">
+                      <!-- Dynamically added -->
+                    </ul>
+                  </div>
+
+                  <div class="card-inner-section">
+                    <h4 class="section-title"><i data-lucide="file-search2"></i> AI Recommendation & Fit Summary</h4>
+                    <p id="evaluation-summary" class="summary-paragraph">
+                      <!-- Dynamically added -->
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Skill Gap Matrix Tab -->
+                <div id="gap-tab" class="result-tab-pane">
+                  <div class="card-inner-section">
+                    <h4 class="section-title"><i data-lucide="trending-up"></i> Required vs. Parsed Skills</h4>
+                    <p class="subtitle">Visualizing matches, gaps, and missing key credentials.</p>
+
+                    <div class="skills-grid-header">
+                      <span>Requirement / Skill</span>
+                      <span class="text-center">Required</span>
+                      <span class="text-center">Resume Match</span>
+                      <span>Level / Gap Status</span>
+                    </div>
+                    <div id="skills-matrix-body" class="skills-matrix-body">
+                      <!-- Dynamically filled -->
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Interview Guide Tab -->
+                <div id="interview-tab" class="result-tab-pane">
+                  <div class="card-inner-section">
+                    <h4 class="section-title"><i data-lucide="help-circle"></i> Tailored Screening Questions</h4>
+                    <p class="subtitle">Customized questions targeting candidate gaps and verification points.</p>
+
+                    <div id="interview-questions" class="interview-questions">
+                      <!-- Dynamically filled -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar: Score widget & Contact info -->
+          <div class="side-column flex-column">
+            <!-- Score Card -->
+            <div class="card card-score text-center">
+              <h3>Overall Match Score</h3>
+
+              <div class="score-circle-container">
+                <svg class="score-ring" width="160" height="160">
+                  <defs>
+                    <linearGradient id="score-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="var(--color-primary)" />
+                      <stop offset="100%" stop-color="var(--color-secondary)" />
+                    </linearGradient>
+                  </defs>
+                  <circle class="score-ring-bg" cx="80" cy="80" r="70" />
+                  <circle class="score-ring-progress" cx="80" cy="80" r="70" id="score-progress-bar" />
+                </svg>
+                <div class="score-display">
+                  <span id="score-text">0</span>
+                  <span class="score-percent">%</span>
+                </div>
+              </div>
+
+              <div class="score-rating">
+                <span id="rating-badge" class="badge">Awaiting</span>
+              </div>
+
+              <p id="score-tagline" class="score-tagline">Calculating fit profile...</p>
+            </div>
+
+            <!-- Contact Card -->
+            <div class="card card-contact">
+              <h4>Candidate Metadata</h4>
+
+              <div class="contact-details">
+                <div class="contact-item">
+                  <i data-lucide="user"></i>
+                  <div>
+                    <label>Name</label>
+                    <span id="contact-name">Extracting...</span>
+                  </div>
+                </div>
+                <div class="contact-item">
+                  <i data-lucide="mail"></i>
+                  <div>
+                    <label>Email Address</label>
+                    <span id="contact-email">Extracting...</span>
+                  </div>
+                </div>
+                <div class="contact-item">
+                  <i data-lucide="phone"></i>
+                  <div>
+                    <label>Phone Number</label>
+                    <span id="contact-phone">Extracting...</span>
+                  </div>
+                </div>
+                <div class="contact-item">
+                  <i data-lucide="graduation-cap"></i>
+                  <div>
+                    <label>Education</label>
+                    <span id="contact-education">Extracting...</span>
+                  </div>
+                </div>
+                <div class="contact-item">
+                  <i data-lucide="history"></i>
+                  <div>
+                    <label>Years of Experience</label>
+                    <span id="contact-experience">Extracting...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Configuration Overlay Dialog -->
+  <dialog id="settings-dialog" class="modal-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3><i data-lucide="settings"></i> API Settings</h3>
+        <button id="dialog-close" class="btn-icon">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form id="settings-form" method="dialog">
+        <div class="form-group">
+          <label for="api-mode">API Operational Mode</label>
+          <div class="select-wrapper">
+            <select id="api-mode">
+              <option value="mock">Interactive Demo Mode (No Key Required)</option>
+              <option value="gemini">Google Gemini Live API</option>
+              <option value="ml-backend">Local Python ML Backend (FastAPI)</option>
+            </select>
+          </div>
+          <p class="help-text">Interactive Demo Mode returns fast simulated analysis templates. Select Gemini to use
+            your live Google API key.</p>
+        </div>
+
+        <div id="gemini-key-group" class="form-group" style="display: none;">
+          <label for="api-key">Gemini API Key</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="api-key" placeholder="AIzaSy...">
+            <button type="button" id="toggle-key-visibility" class="btn-icon" title="Toggle visibility">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+          <p class="help-text">Keys are stored only in your local browser storage (`localStorage`). Obtain keys from <a
+              href="https://aistudio.google.com/" target="_blank">Google AI Studio</a>.</p>
+        </div>
+
+        <div id="gemini-model-group" class="form-group" style="display: none;">
+          <label for="api-model-select">Gemini Model</label>
+          <div class="select-wrapper">
+            <select id="api-model-select">
+              <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended, fast & smart)</option>
+              <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" id="btn-settings-cancel" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btn-settings-save" class="btn btn-primary">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Application script -->
+  <script src="js/app.js"></script>
+</body>
+
+</html>
