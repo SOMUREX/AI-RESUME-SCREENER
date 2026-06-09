@@ -13,7 +13,7 @@
 
 A full-stack AI resume screening application that evaluates candidate PDFs against job descriptions using real **machine learning** — not just keyword matching.
 
-[🚀 Live Demo]() · [📖 Read the Docs](#setup--running-locally) · [🧠 ML Architecture](#machine-learning-architecture)
+[🚀 Live Demo](https://somurex.github.io/AI-RESUME-SCREENER/) · [📖 Read the Docs](#setup--running-locally) · [🧠 ML Architecture](#machine-learning-architecture)
 
 </div>
 
