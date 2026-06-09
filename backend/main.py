@@ -126,8 +126,83 @@ def check_skill_in_text(skill_variations: List[str], text_lower: str) -> bool:
                 return True
     return False
 
+def title_case_name(name: str) -> str:
+    """Convert ALL CAPS or all-lower names to proper Title Case."""
+    # Handle ALL CAPS like "JOHN SMITH" -> "John Smith"
+    if name.isupper() or name.islower():
+        return name.title()
+    return name
+
+def extract_name_from_text(text: str, lines: list) -> str:
+    """
+    Multi-strategy name extraction from resume text.
+    Tries 4 approaches in order of confidence.
+    """
+    # --- Strategy 1: spaCy PERSON NER on the first ~500 characters ---
+    # spaCy is very good at detecting human names as PERSON entities
+    try:
+        head_text = " ".join(lines[:15])[:600]
+        doc = nlp(head_text)
+        for ent in doc.ents:
+            if ent.label_ == "PERSON":
+                candidate = ent.text.strip()
+                # Must have at least 2 words, no numbers, reasonable length
+                words = candidate.split()
+                if 2 <= len(words) <= 5 and all(re.match(r"[a-zA-Z\-'\.]+$", w) for w in words):
+                    return title_case_name(candidate)
+    except Exception:
+        pass
+
+    # --- Strategy 2: Line-by-line pattern matching (first 12 lines) ---
+    SKIP_WORDS = {
+        "resume", "curriculum", "vitae", "profile", "contact", "email",
+        "phone", "address", "linkedin", "github", "portfolio", "objective",
+        "summary", "skills", "experience", "education", "projects",
+        "certifications", "achievements", "references", "page", "cv"
+    }
+
+    for line in lines[:12]:
+        # Strip everything except letters, spaces, hyphens, apostrophes, dots
+        line_clean = re.sub(r"[^a-zA-Z\s\-'\.]", "", line).strip()
+        words = line_clean.split()
+
+        if not words or len(words) < 2 or len(words) > 5:
+            continue
+
+        # Skip if any word is a resume-header keyword
+        lower_words = [w.lower() for w in words]
+        if any(w in SKIP_WORDS for w in lower_words):
+            continue
+
+        # Skip if any word is too short (single letters like "A" unless it's initial like "A.")
+        if any(len(w) < 2 for w in words):
+            continue
+
+        # Skip long lines (likely a job title or address)
+        if len(line_clean) > 50:
+            continue
+
+        # Accept if: ALL CAPS name like "JOHN SMITH", or Title Case like "John Smith"
+        all_alpha = all(re.match(r"[a-zA-Z\-'\.]+$", w) for w in words)
+        is_caps_pattern = all(w.isupper() or w.istitle() or (len(w) == 1) for w in words)
+
+        if all_alpha and is_caps_pattern:
+            return title_case_name(line_clean)
+
+    # --- Strategy 3: Extract name from email prefix as last resort ---
+    email_match = re.search(r"([a-zA-Z]+)[._]([a-zA-Z]+)@", text)
+    if email_match:
+        first = email_match.group(1).capitalize()
+        last = email_match.group(2).capitalize()
+        # Ignore generic prefixes like "info", "contact", "hr", "admin"
+        generic = {"info", "contact", "hr", "admin", "hello", "support", "careers"}
+        if first.lower() not in generic and last.lower() not in generic:
+            return f"{first} {last}"
+
+    return "Unknown Candidate"
+
 def extract_metadata(text: str) -> Dict[str, str]:
-    """Heuristic extraction of candidate details from resume text."""
+    """Robust extraction of candidate details from resume text."""
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     metadata = {
         "name": "Unknown Candidate",
@@ -137,64 +212,74 @@ def extract_metadata(text: str) -> Dict[str, str]:
         "experienceYears": "N/A"
     }
 
-    # 1. Candidate Name (Heuristic: First few lines, typical 2-3 proper capitalization words)
-    name_found = False
-    for line in lines[:5]:
-        line_clean = re.sub(r'[^a-zA-Z\s]', '', line).strip()
-        words = line_clean.split()
-        # Ignore common resume header words
-        if 2 <= len(words) <= 4 and all(w[0].isupper() for w in words if w):
-            lower_words = [w.lower() for w in words]
-            if not any(w in ["resume", "curriculum", "vitae", "profile", "contact", "email", "phone"] for w in lower_words):
-                metadata["name"] = line_clean
-                name_found = True
-                break
+    # 1. Candidate Name — multi-strategy extractor
+    metadata["name"] = extract_name_from_text(text, lines)
 
-    # 2. Email Address (Regex standard)
-    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
+    # 2. Email Address
+    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
     if email_match:
         metadata["email"] = email_match.group(0)
 
-    # 3. Phone Number (Heuristic pattern)
-    phone_match = re.search(r'\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}', text)
+    # 3. Phone Number — handles Indian (+91), US, and international formats
+    phone_match = re.search(
+        r"(\+?\d{1,3}[\s\-\.]?)?"          # country code optional: +91, +1
+        r"(\(?\d{3,5}\)?[\s\-\.]?)"        # area code
+        r"(\d{3,4}[\s\-\.]?)"              # exchange
+        r"(\d{3,4})",                       # subscriber
+        text
+    )
     if phone_match:
-        metadata["phone"] = phone_match.group(0)
+        raw_phone = phone_match.group(0).strip()
+        # Discard if it looks like a year (e.g., "2020")
+        if len(re.sub(r"\D", "", raw_phone)) >= 8:
+            metadata["phone"] = raw_phone
 
-    # 4. Education (Degree and Major scanner)
-    edu_indicators = ["bachelor", "master", "ph.d", "doctor", "b.tech", "m.tech", "b.s.", "m.s.", "bba", "mba", "university", "college", "institute"]
+    # 4. Education — scan for degree keywords
+    edu_indicators = [
+        "bachelor", "master", "ph.d", "phd", "doctor",
+        "b.tech", "m.tech", "b.e.", "m.e.", "b.sc", "m.sc",
+        "b.s.", "m.s.", "bba", "mba", "be ", "me ",
+        "university", "college", "institute", "school of"
+    ]
     edu_lines = []
     for line in lines:
         line_lower = line.lower()
         if any(ind in line_lower for ind in edu_indicators):
-            edu_lines.append(line)
+            edu_lines.append(line.strip())
             if len(edu_lines) >= 2:
                 break
     if edu_lines:
         metadata["education"] = " / ".join(edu_lines[:2])
 
-    # 5. Experience Years (Scanning digits + 'year' proximity)
-    exp_matches = re.findall(r'(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:year|yr)s?\s*(?:of)?\s*(?:experience|exp)', text, re.IGNORECASE)
+    # 5. Experience Years — direct mention or date range inference
+    exp_matches = re.findall(
+        r"(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:year|yr)s?\s*(?:of)?\s*(?:experience|exp)",
+        text, re.IGNORECASE
+    )
     if exp_matches:
-        # Take the maximum years detected
         try:
             years = max([float(x) for x in exp_matches])
             metadata["experienceYears"] = f"{int(years) if years.is_integer() else years} Years"
         except ValueError:
             pass
     else:
-        # Fallback date ranges calculation (e.g. 2019 - 2023)
-        year_ranges = re.findall(r'\b(20\d{2})\b\s*(?:-|to)\s*\b(20\d{2}|present|current)\b', text, re.IGNORECASE)
+        # Fallback: infer from date ranges like "2019 – 2023" or "Jan 2020 - Present"
+        year_ranges = re.findall(
+            r"\b(20\d{2})\b\s*(?:–|-|to)\s*\b(20\d{2}|present|current|now)\b",
+            text, re.IGNORECASE
+        )
         if year_ranges:
             total_years = 0
             for start, end in year_ranges:
                 start_yr = int(start)
-                end_yr = 2026 if end.lower() in ["present", "current"] else int(end)
+                end_yr = 2026 if end.lower() in ["present", "current", "now"] else int(end)
                 if end_yr >= start_yr:
                     total_years += (end_yr - start_yr)
             if total_years > 0:
                 metadata["experienceYears"] = f"{total_years} Years"
 
     return metadata
+
 
 @app.get("/")
 def read_root():

@@ -155,7 +155,22 @@ const dom = {
   apiModelSelect: document.getElementById('api-model-select'),
   btnSettingsCancel: document.getElementById('btn-settings-cancel'),
   btnSettingsSave: document.getElementById('btn-settings-save'),
-  themeToggle: document.getElementById('theme-toggle')
+  themeToggle: document.getElementById('theme-toggle'),
+
+  // Loading panel dynamic heading
+  loaderHeading: document.getElementById('loader-heading'),
+
+  // Mode info banners in settings
+  modeInfoMl: document.getElementById('mode-info-ml'),
+  modeInfoGemini: document.getElementById('mode-info-gemini'),
+  modeInfoMock: document.getElementById('mode-info-mock'),
+
+  // API key inline error
+  apiKeyError: document.getElementById('api-key-error'),
+
+  // Settings modal warning banner
+  settingsWarning: document.getElementById('settings-warning'),
+  settingsWarningText: document.getElementById('settings-warning-text')
 };
 
 // Initialize App
@@ -188,13 +203,31 @@ function setupEventListeners() {
   }
 
   // Config Modal triggering
-  dom.btnSettingsTrigger.addEventListener('click', () => {
+  const openSettings = (warningMsg = null) => {
     dom.apiModeSelect.value = state.apiMode;
     dom.apiKeyInput.value = state.apiKey;
     dom.apiModelSelect.value = state.apiModel;
     handleApiModeChange();
+    // Show optional warning banner inside modal
+    if (warningMsg && dom.settingsWarning) {
+      dom.settingsWarningText.textContent = warningMsg;
+      dom.settingsWarning.style.display = 'flex';
+    } else if (dom.settingsWarning) {
+      dom.settingsWarning.style.display = 'none';
+    }
     dom.settingsDialog.showModal();
-  });
+    // Auto-focus the key input if Gemini mode and key is missing
+    if (state.apiMode === 'gemini' && !state.apiKey) {
+      setTimeout(() => dom.apiKeyInput.focus(), 100);
+    }
+  };
+
+  dom.btnSettingsTrigger.addEventListener('click', () => openSettings());
+
+  // Make the status badge clickable to open settings
+  dom.apiStatusBadge.style.cursor = 'pointer';
+  dom.apiStatusBadge.title = 'Click to open API Configuration';
+  dom.apiStatusBadge.addEventListener('click', () => openSettings());
 
   dom.dialogClose.addEventListener('click', () => dom.settingsDialog.close());
   dom.btnSettingsCancel.addEventListener('click', () => dom.settingsDialog.close());
@@ -213,8 +246,29 @@ function setupEventListeners() {
 
   dom.settingsForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    state.apiMode = dom.apiModeSelect.value;
-    state.apiKey = dom.apiKeyInput.value.trim();
+    const selectedMode = dom.apiModeSelect.value;
+    const enteredKey = dom.apiKeyInput.value.trim();
+
+    // Validate: Gemini mode requires an API key
+    if (selectedMode === 'gemini' && !enteredKey) {
+      // Show inline error on key field
+      if (dom.apiKeyError) {
+        dom.apiKeyError.style.display = 'flex';
+      }
+      dom.apiKeyInput.classList.add('input-error');
+      dom.apiKeyInput.focus();
+      // Shake animation
+      dom.apiKeyInput.classList.add('shake');
+      setTimeout(() => dom.apiKeyInput.classList.remove('shake'), 500);
+      return; // Block save
+    }
+
+    // Clear any previous errors
+    if (dom.apiKeyError) dom.apiKeyError.style.display = 'none';
+    dom.apiKeyInput.classList.remove('input-error');
+
+    state.apiMode = selectedMode;
+    state.apiKey = enteredKey;
     state.apiModel = dom.apiModelSelect.value;
 
     localStorage.setItem('screener_api_mode', state.apiMode);
@@ -319,7 +373,14 @@ function setupEventListeners() {
   });
 
   // Main buttons
-  dom.btnScreen.addEventListener('click', startScreeningFlow);
+  dom.btnScreen.addEventListener('click', () => {
+    // Gate: Gemini mode selected but no API key saved — redirect to settings
+    if (state.apiMode === 'gemini' && !state.apiKey) {
+      openSettings('⚠️ Gemini mode requires an API key. Please enter your key below to continue.');
+      return;
+    }
+    startScreeningFlow();
+  });
   dom.btnReset.addEventListener('click', () => {
     dom.resultsPanel.style.display = 'none';
     dom.inputSection.style.display = 'grid';
@@ -339,9 +400,15 @@ function setupEventListeners() {
   });
 }
 
-// State changes API Modal UI toggle
+// State changes API Modal UI toggle — shows/hides Gemini fields & mode info banners
 function handleApiModeChange() {
   const mode = dom.apiModeSelect.value;
+
+  // Clear any previous validation errors when switching modes
+  if (dom.apiKeyError) dom.apiKeyError.style.display = 'none';
+  if (dom.apiKeyInput) dom.apiKeyInput.classList.remove('input-error');
+
+  // Show/hide Gemini-specific fields
   if (mode === 'gemini') {
     dom.geminiKeyGroup.style.display = 'flex';
     dom.geminiModelGroup.style.display = 'flex';
@@ -349,19 +416,27 @@ function handleApiModeChange() {
     dom.geminiKeyGroup.style.display = 'none';
     dom.geminiModelGroup.style.display = 'none';
   }
+
+  // Show the right mode info banner
+  dom.modeInfoMl.style.display = mode === 'ml-backend' ? 'flex' : 'none';
+  dom.modeInfoGemini.style.display = mode === 'gemini' ? 'flex' : 'none';
+  dom.modeInfoMock.style.display = mode === 'mock' ? 'flex' : 'none';
 }
 
 // Update Top Navbar Badge
 function updateApiStatusUI() {
   if (state.apiMode === 'gemini' && state.apiKey) {
     dom.apiStatusBadge.className = 'status-indicator mode-live';
-    dom.apiStatusText.textContent = `Gemini Live (${state.apiModel})`;
+    dom.apiStatusText.textContent = `✨ Gemini Live · ${state.apiModel}`;
+  } else if (state.apiMode === 'gemini' && !state.apiKey) {
+    dom.apiStatusBadge.className = 'status-indicator mode-mock';
+    dom.apiStatusText.textContent = '✨ Gemini (No Key Set)';
   } else if (state.apiMode === 'ml-backend') {
     dom.apiStatusBadge.className = 'status-indicator mode-live';
-    dom.apiStatusText.textContent = 'Local Python ML Backend';
+    dom.apiStatusText.textContent = '⚡ Local ML Backend';
   } else {
     dom.apiStatusBadge.className = 'status-indicator mode-mock';
-    dom.apiStatusText.textContent = 'Interactive Demo Mode';
+    dom.apiStatusText.textContent = '🔵 Demo Mode';
   }
 }
 
@@ -481,20 +556,23 @@ async function startScreeningFlow() {
 
   dom.inputSection.style.display = 'none';
   dom.loadingPanel.style.display = 'flex';
-  dom.loaderStatus.textContent = "Parsing candidate resume parameters...";
+  dom.loaderStatus.textContent = 'Parsing candidate resume parameters...';
 
   try {
     let responseData = null;
 
     if (state.apiMode === 'gemini' && state.apiKey) {
-      dom.loaderStatus.textContent = "Running advanced semantic skill mapping via Google Gemini...";
+      if (dom.loaderHeading) dom.loaderHeading.textContent = '✨ Consulting Gemini AI...';
+      dom.loaderStatus.textContent = 'Sending resume to Google Gemini for deep semantic analysis...';
       responseData = await screenWithGeminiAPI(jd, resume);
     } else if (state.apiMode === 'ml-backend') {
-      dom.loaderStatus.textContent = "Running local ML analysis (FastAPI Backend)...";
+      if (dom.loaderHeading) dom.loaderHeading.textContent = '⚡ Running Local ML Analysis...';
+      dom.loaderStatus.textContent = 'Computing Sentence-BERT embeddings and spaCy skill extraction...';
       responseData = await screenWithMLBackend(jd, resume);
     } else {
-      dom.loaderStatus.textContent = "Synthesizing deep semantic analysis (Mock Mode)...";
-      await delay(2000); // UI breathing room for premium visual spinner loading
+      if (dom.loaderHeading) dom.loaderHeading.textContent = '🔵 Generating Demo Analysis...';
+      dom.loaderStatus.textContent = 'Synthesizing keyword-based screening results...';
+      await delay(2000);
       responseData = generateMockAnalysis(jd, resume, originFilename);
     }
 

@@ -1,51 +1,79 @@
 @echo off
 echo ===================================================
-echo   ResumeAI Screener - Setting Up Python ML Backend  
+echo   ResumeAI Screener - Python ML Backend Setup
 echo ===================================================
 echo.
 
-:: Check for python
+:: Always work from the script's own directory (fixes path issues)
+cd /d "%~dp0"
+echo [INFO] Working directory: %CD%
+echo.
+
+:: Check for Python
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Python is not installed or not added to your system PATH.
-    echo Please install Python 3.8+ and try again.
+    echo [ERROR] Python is not installed or not in PATH.
+    echo         Download it from https://python.org/downloads/
+    echo         Make sure to check "Add Python to PATH" during install.
     pause
-    exit /b
+    exit /b 1
 )
 
-:: Check if virtual environment exists, if not create it
-if not exist .venv (
-    echo [INFO] Creating Python virtual environment in .venv...
+echo [OK] Python found:
+python --version
+echo.
+
+:: Create virtual environment if it doesn't exist
+if not exist ".venv" (
+    echo [INFO] Creating virtual environment (.venv)...
     python -m venv .venv
     if %errorlevel% neq 0 (
         echo [ERROR] Failed to create virtual environment.
         pause
-        exit /b
+        exit /b 1
     )
+    echo [OK] Virtual environment created.
+) else (
+    echo [OK] Virtual environment already exists.
 )
+echo.
 
+:: Activate virtual environment
 echo [INFO] Activating virtual environment...
-call .venv\Scripts\activate
-
-echo [INFO] Installing requirements (FastAPI, Sentence-Transformers, spaCy, scikit-learn)...
-pip install -r backend\requirements.txt
+call ".venv\Scripts\activate.bat"
 if %errorlevel% neq 0 (
-    echo [ERROR] Failed to install requirements.
+    echo [ERROR] Could not activate virtual environment.
     pause
-    exit /b
+    exit /b 1
 )
-
-echo [INFO] Verifying spaCy NLP models...
-python -m spacy download en_core_web_sm
-
-echo.
-echo ===================================================
-echo   Starting FastAPI Server on http://127.0.0.1:8000
-echo ===================================================
+echo [OK] Virtual environment active.
 echo.
 
-:: Navigate to backend and start uvicorn
+:: Install dependencies
+echo [INFO] Installing Python packages (this may take a few minutes on first run)...
+pip install -r backend\requirements.txt --quiet
+if %errorlevel% neq 0 (
+    echo [ERROR] Package installation failed.
+    pause
+    exit /b 1
+)
+echo [OK] All packages installed.
+echo.
+
+:: Download spaCy model
+echo [INFO] Checking spaCy model (en_core_web_sm)...
+python -m spacy download en_core_web_sm --quiet
+echo [OK] spaCy model ready.
+echo.
+
+:: Start FastAPI server
+echo ===================================================
+echo   Backend ready!  http://127.0.0.1:8000
+echo   Press Ctrl+C to stop the server.
+echo ===================================================
+echo.
+
 cd backend
-uvicorn main:app --port 8000 --reload
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
 pause

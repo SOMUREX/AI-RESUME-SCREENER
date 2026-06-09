@@ -478,7 +478,7 @@ select:focus,
 input:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(18, 66, 169, 0.2);
-  background: rgba(141, 16, 155, 0.05);
+  background: rgba(158, 15, 174, 0.434);
 }
 
 .textarea-footer {
@@ -1352,4 +1352,157 @@ select {
   .grid-layout-3-2 {
     grid-template-columns: 1fr;
   }
+}
+
+/* ===========================
+   Mode Info Cards (Settings Modal)
+   =========================== */
+.mode-info-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  margin-bottom: 12px;
+  animation: fadeIn 0.2s ease;
+}
+
+.mode-info-card p {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.mode-info-card strong {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.mode-info-card a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.mode-info-card code {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.78rem;
+  font-family: 'Courier New', monospace;
+  color: var(--color-secondary);
+}
+
+.mode-info-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ML Backend card — green accent */
+.mode-info-ml {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+/* Gemini card — blue accent */
+.mode-info-gemini {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+/* Mock card — muted accent */
+.mode-info-mock {
+  border-color: rgba(100, 116, 139, 0.35);
+  background: rgba(100, 116, 139, 0.06);
+}
+
+/* ===========================
+   Settings Warning Banner
+   =========================== */
+.settings-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
+  color: #d97706;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 16px;
+  animation: fadeIn 0.25s ease;
+}
+
+.settings-warning i {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+/* ===========================
+   API Key Inline Error
+   =========================== */
+.api-key-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  font-size: 0.82rem;
+  margin-top: 8px;
+  line-height: 1.5;
+  animation: fadeIn 0.2s ease;
+}
+
+.api-key-error i {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+}
+
+.api-key-error a {
+  color: #ef4444;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+/* Input with validation error */
+.input-error {
+  border-color: rgba(239, 68, 68, 0.7) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+}
+
+/* Required field star label */
+.required-star {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Shake animation for invalid input */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.shake {
+  animation: shake 0.45s ease;
 }
