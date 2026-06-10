@@ -3,6 +3,7 @@ import os
 import spacy
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
@@ -108,17 +109,15 @@ SKILL_TAXONOMY = {
     "Product Management": ["product management", "pm", "roadmap", "backlog", "jira"]
 }
 
-def clean_and_normalize(text: str) -> str:
-    """Normalizes string tokens for robust matching."""
-    return " ".join(text.lower().split())
-
 def check_skill_in_text(skill_variations: List[str], text_lower: str) -> bool:
     """Uses regex word boundary rules for short names to avoid false matches."""
     for var in skill_variations:
         var_clean = var.lower()
         # Word boundaries are critical for short tokens like 'go', 'ts', 'r', 'ml'
         if len(var_clean) <= 3 or var_clean.isalpha():
-            pattern = r'\b' + re.escape(var_clean) + r'\b'
+            start_boundary = r'\b' if var_clean[0].isalnum() else ''
+            end_boundary = r'\b' if var_clean[-1].isalnum() else ''
+            pattern = start_boundary + re.escape(var_clean) + end_boundary
             if re.search(pattern, text_lower):
                 return True
         else:
@@ -365,7 +364,13 @@ def analyze_resume(payload: ScreeningRequest):
         # Determine if required (heuristically, first few items or matching text hints)
         # If the skill appears early in the job description or is marked 'required'
         is_required = True
-        idx = job_desc.lower().find(skill.lower())
+        idx = -1
+        for var in SKILL_TAXONOMY.get(skill, [skill]):
+            var_idx = job_desc.lower().find(var.lower())
+            if var_idx != -1:
+                idx = var_idx
+                break
+
         if idx != -1:
             # Check context around the skill keyword for optional flags
             context = job_desc.lower()[max(0, idx-40):min(len(job_desc), idx+40)]
@@ -419,7 +424,6 @@ def analyze_resume(payload: ScreeningRequest):
     weaknesses.append("Recommendation to verify actual hand-on depth through technical validation tests.")
 
     # 9. Recommendation Summary
-    role_title = metadata["name"]
     summary = (
         f"Candidate {metadata['name']} displays a hybrid NLP evaluation score of {match_score}% alignment. "
         f"They demonstrate solid qualifications in {', '.join(matched_jd_skills[:2]) if matched_jd_skills else 'general engineering concepts'}, "
